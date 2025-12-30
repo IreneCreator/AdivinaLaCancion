@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adivina el Hit 2024 - Offline Ready</title>
+    <!-- Manifest para que se pueda instalar como App -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJkZWZhdWx0X2xvY2FsZSI6ICJlcyIsCiAgIm5hbWUiOiAiQWRpdmluYSBlbCBIaXQgMjAyNCIsCiAgInNob3J0X25hbWUiOiAiSGl0MjAyNCIsCiAgInN0YXJ0X3VybCI6ICIuIiwKICAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwKICAiYmFja2dyb3VuZF9jb2xvciI6ICIjMGYxNzJhIiwKICAidGhlbWVfY29sb3IiOiAiIzBmMTcyYSIKfQ==">
+    
+    <!-- Scripts con integridad para asegurar carga -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; }
+        .spin-anim { animation: roll 0.1s linear infinite; }
+        @keyframes roll {
+            from { transform: translateY(-10px); opacity: 0.5; }
+            to { transform: translateY(10px); opacity: 0.5; }
+        }
+        .all-in-glow {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            animation: pulse-glow 1.5s infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { border-color: rgba(99, 102, 241, 0.8); }
+            50% { border-color: rgba(168, 85, 247, 0.8); }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Service Worker inline para funcionamiento Offline
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                const swCode = `
+                    const CACHE_NAME = 'hit-2024-v5';
+                    const ASSETS = [
+                        '${window.location.href}',
+                        'https://unpkg.com/react@18/umd/react.production.min.js',
+                        'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+                        'https://unpkg.com/@babel/standalone/babel.min.js',
+                        'https://cdn.tailwindcss.com',
+                        'https://unpkg.com/lucide@latest'
+                    ];
+                    self.addEventListener('install', e => {
+                        e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)));
+                    });
+                    self.addEventListener('fetch', e => {
+                        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+                    });
+                `;
+                const blob = new Blob([swCode], { type: 'application/javascript' });
+                navigator.serviceWorker.register(URL.createObjectURL(blob));
+            });
+        }
+
+        const Icon = ({ name, size = 20, className = "" }) => {
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, [name]);
+            return <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        };
+
+        const DEFAULT_CATEGORIES = [
+            { id: 1, name: 'Perreo Old School', color: 'bg-pink-500' },
+            { id: 2, name: 'Camp Rock & Disney', color: 'bg-blue-400' },
+            { id: 3, name: 'Pop Español 2000', color: 'bg-yellow-500' },
+            { id: 4, name: 'Himnos Actuales', color: 'bg-purple-600' },
+            { id: 5, name: 'La de los Padres', color: 'bg-orange-500' }
+        ];
+
+        const App = () => {
+            const [teams, setTeams] = useState(() => JSON.parse(localStorage.getItem('nochevieja_teams')) || []);
+            const [categories, setCategories] = useState(() => JSON.parse(localStorage.getItem('nochevieja_categories')) || DEFAULT_CATEGORIES);
+            const [newTeamName, setNewTeamName] = useState('');
+            const [newCategoryName, setNewCategoryName] = useState('');
+            const [currentCategory, setCurrentCategory] = useState(null);
+            const [isSpinning, setIsSpinning] = useState(false);
+            const [accumulatedPoints, setAccumulatedPoints] = useState(5);
+            const [gameLogs, setGameLogs] = useState([]);
+            const [allInTeamId, setAllInTeamId] = useState(null);
+
+            useEffect(() => localStorage.setItem('nochevieja_teams', JSON.stringify(teams)), [teams]);
+            useEffect(() => localStorage.setItem('nochevieja_categories', JSON.stringify(categories)), [categories]);
+
+            const sortedTeams = [...teams].sort((a, b) => b.points - a.points);
+
+            // Calcula cuánto restar proporcionalmente (Bote / 5)
+            const getDegradationAmount = () => {
+                return Math.max(1, Math.floor(accumulatedPoints / 5));
+            };
+
+            const addTeam = () => {
+                if (newTeamName.trim()) {
+                    setTeams([...teams, { id: Date.now(), name: newTeamName, points: 0, shieldAvailable: true }]);
+                    setNewTeamName('');
+                }
+            };
+
+            const addCategory = () => {
+                if (newCategoryName.trim()) {
+                    const colors = ['bg-red-500', 'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500', 'bg-indigo-500'];
+                    setCategories([...categories, { id: Date.now(), name: newCategoryName.trim(), color: colors[Math.floor(Math.random() * colors.length)] }]);
+                    setNewCategoryName('');
+                }
+            };
+
+            const handleResult = (teamId, isWin) => {
+                const isAllInActive = allInTeamId === teamId;
+                const multiplier = isAllInActive ? 2 : 1;
+                const amount = accumulatedPoints * multiplier;
+                const finalAmount = isWin ? amount : -amount;
+                
+                setTeams(teams.map(t => t.id === teamId ? { ...t, points: t.points + finalAmount } : t));
+                
+                const team = teams.find(t => t.id === teamId);
+                const typeLabel = isAllInActive ? `TODO O NADA (x2)` : 'BOTE';
+                addLog(`${team.name} ${isWin ? '✅' : '❌'} (${typeLabel}: ${finalAmount} pts)`);
+                
+                if (isWin) setAccumulatedPoints(5);
+                setAllInTeamId(null);
+            };
+
+            const toggleAllIn = (teamId) => {
+                setAllInTeamId(allInTeamId === teamId ? null : teamId);
+            };
+
+            const spinCategory = () => {
+                if (categories.length === 0) return;
+                setIsSpinning(true);
+                let iterations = 0;
+                const interval = setInterval(() => {
+                    setCurrentCategory(categories[Math.floor(Math.random() * categories.length)]);
+                    iterations++;
+                    if (iterations > 15) { clearInterval(interval); setIsSpinning(false); }
+                }, 100);
+            };
+
+            const addLog = (msg) => setGameLogs([`[${new Date().toLocaleTimeString()}] ${msg}`, ...gameLogs.slice(0, 4)]);
+
+            return (
+                <div className="min-h-screen p-4 max-w-6xl mx-auto">
+                    <header className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-2 rounded-lg shadow-lg">
+                                <Icon name="music" size={24} />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-black bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent uppercase tracking-tighter italic">ADIVINA EL HIT 🥂</h1>
+                                <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest italic">Nochevieja 2024</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-3 bg-slate-800 p-3 px-5 rounded-2xl border border-slate-700 shadow-2xl relative overflow-hidden group">
+                             <div className="absolute top-0 left-0 w-1 h-full bg-yellow-500 opacity-50"></div>
+                             <div className="text-right">
+                                <span className="text-[10px] block text-slate-400 font-black uppercase tracking-widest mb-1">Bote en Juego</span>
+                                <div className="flex items-center gap-1 justify-end">
+                                    <span className="text-3xl font-black text-yellow-400 tabular-nums drop-shadow-[0_0_8px_rgba(250,204,21,0.3)]">{accumulatedPoints}</span>
+                                    <span className="text-[10px] text-yellow-600 font-black uppercase">pts</span>
+                                </div>
+                             </div>
+                             <div className="h-12 w-px bg-slate-700 mx-2"></div>
+                             <div className="grid grid-cols-2 gap-1.5">
+                                <button onClick={() => setAccumulatedPoints(prev => prev + 5)} className="bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 p-1 px-3 rounded-lg hover:bg-emerald-600/40 transition flex items-center justify-center gap-1 group/btn">
+                                    <Icon name="plus" size={12} className="group-hover/btn:scale-125 transition"/>
+                                    <span className="text-[9px] font-black uppercase">+5</span>
+                                </button>
+                                <button onClick={() => setAccumulatedPoints(5)} className="bg-slate-700/50 text-slate-400 border border-slate-600/30 p-1 px-3 rounded-lg hover:bg-slate-700 transition flex items-center justify-center gap-1 group/btn" title="Resetear a 5">
+                                    <Icon name="rotate-ccw" size={12} className="group-hover/btn:rotate-[-45deg] transition"/>
+                                    <span className="text-[9px] font-black uppercase">Reset</span>
+                                </button>
+                                <button onClick={() => setAccumulatedPoints(prev => Math.max(0, prev - getDegradationAmount()))} className="col-span-2 bg-rose-600/20 text-rose-400 border border-rose-500/30 p-1 px-3 rounded-lg hover:bg-rose-600/40 transition flex items-center justify-center gap-2 group/btn">
+                                    <Icon name="trending-down" size={12} className="group-hover/btn:-translate-y-0.5 group-hover/btn:translate-x-0.5 transition"/>
+                                    <span className="text-[9px] font-black uppercase tracking-tighter">Degradar (-{getDegradationAmount()})</span>
+                                </button>
+                             </div>
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <section className="lg:col-span-2 space-y-4">
+                            <div className="bg-slate-800/40 rounded-[2rem] p-6 border border-slate-700/50 backdrop-blur-xl shadow-2xl">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-lg font-bold flex items-center gap-2 uppercase tracking-tight italic"><Icon name="users" className="text-purple-400"/> Clasificación</h2>
+                                    <div className="flex gap-2">
+                                        <input type="text" placeholder="Nuevo equipo..." value={newTeamName} onChange={e => setNewTeamName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addTeam()} className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-1.5 text-xs focus:ring-1 focus:ring-purple-500 outline-none w-40 placeholder:text-slate-700" />
+                                        <button onClick={addTeam} className="bg-purple-600 hover:bg-purple-500 p-2 rounded-xl transition shadow-lg shadow-purple-900/40 active:scale-90"><Icon name="user-plus" size={18}/></button>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    {sortedTeams.map((team, idx) => {
+                                        const isThisTeamInAllIn = allInTeamId === team.id;
+                                        return (
+                                            <div key={team.id} className={`flex items-center justify-between p-5 rounded-3xl border transition-all duration-300 ${isThisTeamInAllIn ? 'all-in-glow bg-indigo-900/40 scale-[1.02]' : (idx === 0 ? 'bg-gradient-to-r from-purple-900/20 to-slate-900/40 border-purple-500/30 shadow-lg' : 'bg-slate-900/60 border-slate-800')}`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner ${idx === 0 ? 'bg-yellow-500 text-slate-900 shadow-yellow-400/50' : 'bg-slate-800 text-slate-600'}`}>
+                                                        {idx === 0 ? '🏆' : idx + 1}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-black text-xl tracking-tight uppercase italic">{team.name}</span>
+                                                            {isThisTeamInAllIn && <span className="bg-indigo-500 text-[8px] font-black px-2 py-0.5 rounded-md animate-pulse uppercase tracking-widest border border-indigo-400">Todo o Nada</span>}
+                                                        </div>
+                                                        <button onClick={() => setTeams(teams.map(t => t.id === team.id ? {...t, shieldAvailable: !t.shieldAvailable} : t))} className={`text-[9px] w-fit px-2 py-0.5 rounded-full border mt-1 font-bold tracking-tighter ${team.shieldAvailable ? 'border-blue-500/50 text-blue-400 bg-blue-500/5 hover:bg-blue-500/10' : 'border-slate-800 text-slate-700 line-through opacity-50'}`}>ESCUDO REBOTE</button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-6">
+                                                    <div className="text-right min-w-[60px]">
+                                                        <span className={`text-4xl font-black tabular-nums tracking-tighter ${isThisTeamInAllIn ? 'text-indigo-400' : 'text-white'}`}>{team.points}</span>
+                                                        <span className="block text-[8px] text-slate-500 font-black uppercase tracking-tighter">Ptos</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex flex-col gap-1">
+                                                            <button onClick={() => handleResult(team.id, true)} className="bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition flex flex-col items-center min-w-[95px] group/res">
+                                                                <span className="text-lg group-hover/res:scale-110 transition">✅</span>
+                                                                <span className="text-[9px] mt-0.5 uppercase tracking-tighter">Acierto</span>
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => toggleAllIn(team.id)} 
+                                                                className={`py-1 rounded-xl text-[9px] font-black border transition-all uppercase tracking-tighter ${isThisTeamInAllIn ? 'bg-indigo-500 border-indigo-400 text-white shadow-lg shadow-indigo-500/40 scale-105' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/50'}`}
+                                                            >
+                                                                ⚡ Todo o Nada
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <button onClick={() => handleResult(team.id, false)} className="bg-rose-600 hover:bg-rose-500 px-4 py-2.5 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition flex flex-col items-center min-w-[95px] group/res">
+                                                                <span className="text-lg group-hover/res:scale-110 transition">❌</span>
+                                                                <span className="text-[9px] mt-0.5 uppercase tracking-tighter">Fallo</span>
+                                                            </button>
+                                                            <button onClick={() => setTeams(teams.filter(t => t.id !== team.id))} className="bg-slate-800 p-1 rounded-lg text-slate-700 hover:text-rose-400 transition flex justify-center"><Icon name="trash-2" size={12}/></button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {teams.length === 0 && (
+                                        <div className="text-center py-16 border-2 border-dashed border-slate-800 rounded-[2.5rem] text-slate-700 font-black uppercase tracking-widest italic opacity-50">Configura los equipos para empezar</div>
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="space-y-4">
+                            <div className="bg-slate-800/40 rounded-[2rem] p-6 border border-slate-700/50 shadow-xl backdrop-blur-md overflow-hidden relative group">
+                                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                                <div className={`w-full h-28 rounded-2xl flex items-center justify-center text-center p-4 mb-4 transition-all duration-500 shadow-inner border-2 border-white/5 ${currentCategory ? currentCategory.color + ' shadow-black/30' : 'bg-slate-900 border border-slate-800 text-slate-700 italic'}`}>
+                                    <span className={`text-xl font-black uppercase tracking-widest leading-tight ${isSpinning ? 'spin-anim' : ''}`}>
+                                        {currentCategory ? currentCategory.name : 'Pulsa el botón'}
+                                    </span>
+                                </div>
+                                <button onClick={spinCategory} disabled={isSpinning || categories.length === 0} className="w-full py-5 rounded-2xl bg-gradient-to-r from-pink-600 to-purple-600 font-black text-lg hover:shadow-2xl hover:shadow-purple-500/40 transition-all active:scale-95 flex items-center justify-center gap-3 uppercase tracking-wider relative overflow-hidden group/spin">
+                                    <div className="absolute inset-0 bg-white/10 translate-y-full group-hover/spin:translate-y-0 transition-transform duration-300"></div>
+                                    <Icon name="rotate-cw" className={`relative z-10 ${isSpinning ? 'animate-spin' : ''}`}/>
+                                    <span className="relative z-10">¡Sortear Género!</span>
+                                </button>
+                            </div>
+
+                            <div className="bg-slate-800/40 rounded-[2rem] p-6 border border-slate-700/50">
+                                <h3 className="text-[10px] font-black text-slate-500 mb-4 tracking-widest uppercase flex items-center gap-2">
+                                    <Icon name="music-2" size={12}/> Repertorio de Estilos
+                                </h3>
+                                <div className="flex gap-2 mb-4">
+                                    <input type="text" placeholder="Nuevo género..." value={newCategoryName} onChange={e => setNewCategoryName(e.target.value)} onKeyPress={e => e.key === 'Enter' && addCategory()} className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs outline-none focus:border-pink-500 transition-colors shadow-inner text-slate-300" />
+                                    <button onClick={addCategory} className="bg-slate-800 p-2 rounded-xl border border-slate-700 hover:bg-slate-700 active:scale-90 transition shadow-lg"><Icon name="plus" size={14}/></button>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                                    {categories.map(c => (
+                                        <div key={c.id} className={`${c.color} px-2.5 py-1 rounded-lg text-[9px] font-black flex items-center gap-1.5 shadow-md shadow-black/10 group border border-white/10 hover:scale-105 transition-transform`}>
+                                            <span className="uppercase tracking-tighter">{c.name}</span>
+                                            <button onClick={() => setCategories(categories.filter(x => x.id !== c.id))} className="opacity-40 hover:opacity-100 transition"><Icon name="x" size={8}/></button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800/50">
+                                <h4 className="text-[8px] font-black text-slate-600 mb-2 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                                    <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    Monitor de Partida
+                                </h4>
+                                <div className="space-y-1.5">
+                                    {gameLogs.length === 0 && <div className="text-[9px] text-slate-800 italic uppercase font-bold text-center py-2">Esperando jugada...</div>}
+                                    {gameLogs.map((l, i) => (
+                                        <div key={i} className={`text-[9px] font-mono border-l-2 pl-2 truncate italic py-0.5 ${i === 0 ? 'text-indigo-400 border-indigo-500' : 'text-slate-600 border-slate-800'}`}>
+                                            {l}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
