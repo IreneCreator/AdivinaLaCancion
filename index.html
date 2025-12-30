@@ -250,7 +250,7 @@
                                                             {isThisTeamInAllIn && <span className="bg-indigo-500 text-[8px] font-black px-2 py-0.5 rounded-md animate-pulse uppercase tracking-widest border border-indigo-400">Todo o Nada</span>}
                                                         </div>
                                                         <button onClick={() => setTeams(teams.map(t => t.id === team.id ? {...t, shieldAvailable: !t.shieldAvailable} : t))} className={`text-[9px] w-fit px-2 py-0.5 rounded-full border mt-1 font-bold tracking-tighter ${team.shieldAvailable ? 'border-blue-500/50 text-blue-400 bg-blue-500/5 hover:bg-blue-500/10' : 'border-slate-800 text-slate-700 line-through opacity-50'}`}>ESCUDO REBOTE</button>
-                                                        <button onClick={() => deleteTeam(team.id)} className="bg-slate-700 w-8 h-10 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors" title="Eliminar equipo"> <Trash2 size={16}/> </button>
+                                                        <button onClick={() => deleteTeam(team.id)} className="bg-slate-800 p-1 rounded text-slate-600 hover:text-rose-500 transition-colors">ELIMINAR</button>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-6">
