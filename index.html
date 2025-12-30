@@ -41,11 +41,11 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // Service Worker inline para funcionamiento Offline con persistencia
-        if ('serviceWorker' in navigator) {
+        // Service Worker para funcionamiento Offline con persistencia
+       if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 const swCode = `
-                    const CACHE_NAME = 'hit-2024-final-v1';
+                    const CACHE_NAME = 'hit-2024-offline-v9';
                     const ASSETS = [
                         './',
                         'index.html',
@@ -58,10 +58,7 @@
 
                     self.addEventListener('install', e => {
                         e.waitUntil(
-                            caches.open(CACHE_NAME).then(cache => {
-                                console.log('Cacheando recursos...');
-                                return cache.addAll(ASSETS);
-                            })
+                            caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
                         );
                         self.skipWaiting();
                     });
@@ -69,34 +66,33 @@
                     self.addEventListener('activate', e => {
                         e.waitUntil(
                             caches.keys().then(keys => Promise.all(
-                                keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
+                                keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
                             ))
                         );
-                        self.skipWaiting();
                     });
 
                     self.addEventListener('fetch', e => {
-                        // Estrategia: Intentar red, si falla usar cache
                         e.respondWith(
-                            fetch(e.request).catch(() => {
-                                return caches.match(e.request).then(response => {
-                                    if (response) return response;
-                                    // Si es una navegación (página principal), devolver el index cacheado
-                                    if (e.request.mode === 'navigate') {
-                                        return caches.match('./') || caches.match('index.html');
-                                    }
+                            caches.match(e.request).then(res => {
+                                return res || fetch(e.request).catch(() => {
+                                    if (e.request.mode === 'navigate') return caches.match('./');
                                 });
                             })
                         );
                     });
                 `;
 
-                const blob = new Blob([swCode], { type: 'application/javascript' });
-                const swUrl = URL.createObjectURL(blob);
+                // Convertimos el código a Base64 para una URL de datos persistente
+                const base64SW = btoa(unescape(encodeURIComponent(swCode)));
+                const swUrl = 'data:application/javascript;base64,' + base64SW;
                 
                 navigator.serviceWorker.register(swUrl).then(reg => {
-                    console.log('SW registrado con éxito');
-                }).catch(err => console.log('Error al registrar SW', err));
+                    console.log('Modo offline activado');
+                }).catch(() => {
+                    // Fallback: Si el navegador bloquea data-urls, usamos el Blob anterior
+                    const blob = new Blob([swCode], { type: 'application/javascript' });
+                    navigator.serviceWorker.register(URL.createObjectURL(blob));
+                });
             });
         }
 
